@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 
 namespace System.CommandLine.Binding
 {
@@ -24,6 +25,36 @@ namespace System.CommandLine.Binding
         {
             ModelType = modelType ??
                         throw new ArgumentNullException(nameof(modelType));
+        }
+
+        private void GetPropertyDescriptors(Type curType, ref List<PropertyDescriptor> propertyDescriptors, ref Stack<string> propNameStack)
+        {
+            if (propertyDescriptors == null)
+                propertyDescriptors = new List<PropertyDescriptor>();
+
+            if (propNameStack == null)
+                propNameStack = new Stack<string>();
+
+            var parentPropPath = propNameStack.Aggregate(
+                new StringBuilder(),
+                (sb, n) => sb.Length == 0 ? sb.Append(n) : sb.Insert(0, $".{n}"),
+                sb => sb.ToString()
+            );
+
+            foreach (var propInfo in curType.GetProperties(CommonBindingFlags)
+                .Where(pi => pi.CanWrite))
+            {
+                if (propInfo.PropertyType.IsClass)
+                {
+                    propNameStack.Push(propInfo.Name);
+
+                    GetPropertyDescriptors(propInfo.PropertyType, ref propertyDescriptors, ref propNameStack);
+                }
+                else
+                    propertyDescriptors.Add(new PropertyDescriptor(propInfo, parentPropPath, this));
+            }
+
+            propNameStack.Pop();
         }
 
         public IReadOnlyList<ConstructorDescriptor> ConstructorDescriptors =>
