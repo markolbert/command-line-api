@@ -18,43 +18,39 @@ namespace System.CommandLine.Binding
 
         private static readonly ConcurrentDictionary<Type, ModelDescriptor> _modelDescriptors = new ConcurrentDictionary<Type, ModelDescriptor>();
 
-        private List<PropertyDescriptor> _propertyDescriptors;
         private List<ConstructorDescriptor> _constructorDescriptors;
 
         protected ModelDescriptor(Type modelType)
         {
             ModelType = modelType ??
                         throw new ArgumentNullException(nameof(modelType));
+
+            // Find all the writeable properties in modelType. Note that the collection
+            // is flattened and the property names must all be unique
+            var props = new List<PropertyInfo>();
+
+            GetPropertyDescriptors(modelType, null);
         }
 
-        private void GetPropertyDescriptors(Type curType, ref List<PropertyDescriptor> propertyDescriptors, ref Stack<string> propNameStack)
+        private void GetPropertyDescriptors(Type curType, List<PropertyInfo> parentProps )
         {
-            if (propertyDescriptors == null)
-                propertyDescriptors = new List<PropertyDescriptor>();
+            parentProps ??= new List<PropertyInfo>();
 
-            if (propNameStack == null)
-                propNameStack = new Stack<string>();
-
-            var parentPropPath = propNameStack.Aggregate(
-                new StringBuilder(),
-                (sb, n) => sb.Length == 0 ? sb.Append(n) : sb.Insert(0, $".{n}"),
-                sb => sb.ToString()
-            );
-
-            foreach (var propInfo in curType.GetProperties(CommonBindingFlags)
-                .Where(pi => pi.CanWrite))
+            foreach ( var propInfo in curType.GetProperties( CommonBindingFlags )
+                .Where( pi => pi.CanWrite ) )
             {
-                if (propInfo.PropertyType.IsClass)
-                {
-                    propNameStack.Push(propInfo.Name);
+                PropertyDescriptors.Add( propInfo, parentProps, this );
 
-                    GetPropertyDescriptors(propInfo.PropertyType, ref propertyDescriptors, ref propNameStack);
+                // recurse through writable properties
+                if( propInfo.PropertyType.IsClass || propInfo.PropertyType.IsInterface )
+                {
+                    parentProps.Add( propInfo );
+                    GetPropertyDescriptors( propInfo.PropertyType, parentProps );
                 }
-                else
-                    propertyDescriptors.Add(new PropertyDescriptor(propInfo, parentPropPath, this));
             }
 
-            propNameStack.Pop();
+            if( parentProps.Count > 0 )
+                parentProps.Remove( parentProps.Last() );
         }
 
         public IReadOnlyList<ConstructorDescriptor> ConstructorDescriptors =>
@@ -63,12 +59,7 @@ namespace System.CommandLine.Binding
                          .Select(i => new ConstructorDescriptor(i, this))
                          .ToList();
 
-        public IReadOnlyList<IValueDescriptor> PropertyDescriptors =>
-            _propertyDescriptors ??=
-                ModelType.GetProperties(CommonBindingFlags)
-                         .Where(p => p.CanWrite)
-                         .Select(i => new PropertyDescriptor(i, this))
-                         .ToList();
+        public PropertyDescriptors PropertyDescriptors { get; } = new PropertyDescriptors();
 
         public Type ModelType { get; }
 

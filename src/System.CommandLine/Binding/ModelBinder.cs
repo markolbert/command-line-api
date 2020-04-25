@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 
 namespace System.CommandLine.Binding
@@ -65,11 +66,18 @@ namespace System.CommandLine.Binding
         protected IValueDescriptor FindModelPropertyDescriptor(
             Type propertyType, string propertyName)
         {
-            return ModelDescriptor.PropertyDescriptors
-                .FirstOrDefault(desc =>
-                    desc.ValueType == propertyType &&
-                    string.Equals(desc.ValueName, propertyName, StringComparison.Ordinal)
-                    );
+            return ModelDescriptor.PropertyDescriptors.GetPropertyDescriptor( propertyType, propertyName );
+            //return ModelDescriptor.PropertyDescriptors
+            //    .FirstOrDefault(desc =>
+            //        desc.ValueType == propertyType &&
+            //        string.Equals(desc.ValueName, propertyName, StringComparison.Ordinal)
+            //        );
+        }
+
+        protected IValueDescriptor FindModelPropertyDescriptor<TModel, TValue>(
+            Expression<Func<TModel, TValue>> property )
+        {
+            return ModelDescriptor.PropertyDescriptors.GetPropertyDescriptor( property );
         }
 
         public void BindConstructorArgumentFromValue(ParameterInfo parameter,
@@ -177,7 +185,7 @@ namespace System.CommandLine.Binding
             var boundValues = GetValues(
                 MemberBindingSources,
                 bindingContext,
-                ModelDescriptor.PropertyDescriptors,
+                ModelDescriptor.PropertyDescriptors.Descriptors,
                 includeMissingValues: false);
 
             foreach (var boundValue in boundValues)
@@ -194,10 +202,8 @@ namespace System.CommandLine.Binding
         {
             var values = new List<BoundValue>();
 
-            for (var index = 0; index < valueDescriptors.Count; index++)
+            foreach( var valueDescriptor in valueDescriptors )
             {
-                var valueDescriptor = valueDescriptors[index];
-
                 var valueSource = GetValueSource(bindingSources, bindingContext, valueDescriptor);
 
                 BoundValue boundValue;

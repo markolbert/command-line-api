@@ -15,9 +15,8 @@ namespace System.CommandLine.Binding
             Expression<Func<TModel, TValue>> property,
             IValueDescriptor valueDescriptor)
         {
-            var (propertyType, propertyName) = property.MemberTypeAndName();
-            var propertyDescriptor = FindModelPropertyDescriptor(
-                propertyType, propertyName);
+            //var (propertyType, propertyName) = property.MemberTypeAndName();
+            var propertyDescriptor = FindModelPropertyDescriptor<TModel, TValue>( property );
             MemberBindingSources[propertyDescriptor] = 
                 new SpecificSymbolValueSource(valueDescriptor);
         }
@@ -26,9 +25,8 @@ namespace System.CommandLine.Binding
             Expression<Func<TModel, TValue>> property,
             Func<BindingContext, TValue> getValue)
         {
-            var (propertyType, propertyName) = property.MemberTypeAndName();
-            var propertyDescriptor = FindModelPropertyDescriptor(
-                propertyType, propertyName);
+            //var (propertyType, propertyName) = property.MemberTypeAndName();
+            var propertyDescriptor = FindModelPropertyDescriptor<TModel, TValue>( property );
             MemberBindingSources[propertyDescriptor] =
                 new DelegateValueSource(c => getValue(c));
         }
