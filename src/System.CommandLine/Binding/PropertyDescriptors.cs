@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Linq.Expressions;
@@ -7,14 +8,21 @@ using System.Text;
 
 namespace System.CommandLine.Binding
 {
-    public class PropertyDescriptors
+    public class PropertyDescriptorCollection : KeyedCollection<string, PropertyDescriptor>
     {
-        private readonly Dictionary<string, PropertyDescriptor> _propertyDescriptors =
-            new Dictionary<string, PropertyDescriptor>( StringComparer.Ordinal );
+        protected override string GetKeyForItem( PropertyDescriptor item )
+        {
+            return item.Path;
+        }
+    }
+
+    public class PropertyDescriptors : IReadOnlyList<IValueDescriptor>
+    {
+        private readonly PropertyDescriptorCollection _propertyDescriptors = new PropertyDescriptorCollection();
 
         // mostly for backwards compatibility...
         public ReadOnlyCollection<PropertyDescriptor> Descriptors =>
-            _propertyDescriptors.Select(kvp => kvp.Value)
+            _propertyDescriptors
                 .ToList()
                 .AsReadOnly();
 
@@ -23,7 +31,7 @@ namespace System.CommandLine.Binding
             if( toAdd == null )
                 return false;
 
-            if( _propertyDescriptors.ContainsKey( toAdd.Path ) )
+            if( _propertyDescriptors.Contains( toAdd ) )
             {
                 if( throwOnDuplicate )
                     throw new ArgumentException(
@@ -32,7 +40,7 @@ namespace System.CommandLine.Binding
                 return false;
             }
 
-            _propertyDescriptors.Add( toAdd.Path, toAdd );
+            _propertyDescriptors.Add( toAdd );
 
             return true;
         }
@@ -51,8 +59,8 @@ namespace System.CommandLine.Binding
             bool throwOnMultiple = true )
         {
             var matches = _propertyDescriptors.Where( pd =>
-                    pd.Value.ValueName.Equals( propertyName, StringComparison.Ordinal ) &&
-                    pd.Value.ValueType == propertyType )
+                    pd.ValueName.Equals( propertyName, StringComparison.Ordinal ) &&
+                    pd.ValueType == propertyType )
                 .ToList();
 
             switch( matches.Count )
@@ -61,11 +69,11 @@ namespace System.CommandLine.Binding
                     return null;
 
                 case 1:
-                    return matches[ 0 ].Value;
+                    return matches[ 0 ];
 
                 default:
                     if( !throwOnMultiple )
-                        return matches[ 0 ].Value;
+                        return matches[ 0 ];
 
                     throw new ArgumentException(
                         $"Multiple {nameof(PropertyDescriptor)} objects have {nameof(PropertyDescriptor.ValueName)} '{propertyName}' and {nameof(PropertyDescriptor.ValueType)} '{propertyType.Name}'" );
@@ -73,7 +81,7 @@ namespace System.CommandLine.Binding
         }
 
         public PropertyDescriptor GetPropertyDescriptor( string propertyPath ) =>
-            _propertyDescriptors.ContainsKey( propertyPath )
+            _propertyDescriptors.Contains( propertyPath )
                 ? _propertyDescriptors[ propertyPath ]
                 : null;
 
@@ -141,5 +149,22 @@ namespace System.CommandLine.Binding
                 }
             }
         }
+
+        public IEnumerator<IValueDescriptor> GetEnumerator()
+        {
+            foreach( var retVal in _propertyDescriptors )
+            {
+                yield return retVal;
+            }
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
+        public int Count => _propertyDescriptors.Count;
+
+        public IValueDescriptor this[ int index ] => _propertyDescriptors[ index ];
     }
 }

@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 
@@ -11,6 +12,7 @@ namespace System.CommandLine.Binding
     public class PropertyDescriptor : IValueDescriptor
     {
         private readonly List<PropertyInfo> _propertyPath;
+        private readonly PropertyInfo _crap;
 
         internal PropertyDescriptor(
             PropertyInfo propertyInfo,
@@ -21,6 +23,8 @@ namespace System.CommandLine.Binding
             ValueType = propertyInfo.PropertyType;
 
             Parent = parent;
+
+            _crap = propertyInfo;
 
             _propertyPath = new List<PropertyInfo>( parentProps ) { propertyInfo };
 
@@ -52,14 +56,13 @@ namespace System.CommandLine.Binding
 
         public object GetDefaultValue() => ValueType.GetDefaultValueForType();
 
-        public void SetValue(object instance, object value)
+        public void SetValue( object instance, object value )
         {
-            var lastIdx = _propertyPath.Count - 1;
+            var setIdx = _propertyPath.Count - 1;
 
-            for( var idx = 0; idx < _propertyPath.Count; idx++ )
+            for( var idx = Parent == null ? 0 : 1; idx < _propertyPath.Count; idx++ )
             {
-                if( idx == lastIdx )
-                    _propertyPath[ idx ].SetValue( instance, value );
+                if( idx == setIdx ) _propertyPath[ idx ].SetValue( instance, value );
                 else instance = _propertyPath[ idx ].GetValue( instance );
             }
         }
