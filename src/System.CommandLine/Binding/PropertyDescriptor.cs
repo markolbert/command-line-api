@@ -11,43 +11,45 @@ namespace System.CommandLine.Binding
 {
     public class PropertyDescriptor : IValueDescriptor
     {
-        private readonly List<PropertyInfo> _propertyPath;
-        private readonly PropertyInfo _crap;
-
         internal PropertyDescriptor(
             PropertyInfo propertyInfo,
-            List<PropertyInfo> parentProps,
-            ModelDescriptor parent)
+            ModelDescriptor parent,
+            PropertyDescriptor parentDescriptor = null )
         {
             ValueName = propertyInfo.Name;
             ValueType = propertyInfo.PropertyType;
 
             Parent = parent;
+            PropertyInfo = propertyInfo;
+            ParentDescriptor = parentDescriptor;
 
-            _crap = propertyInfo;
+            var sb = new StringBuilder(ValueName);
+            var curParentDescriptor = parentDescriptor;
 
-            _propertyPath = new List<PropertyInfo>( parentProps ) { propertyInfo };
-
-            var sb = new StringBuilder();
-
-            if( parent != null )
-                sb.Append( Parent );
-
-            foreach( var propInfo in _propertyPath )
+            while( curParentDescriptor != null )
             {
-                if( sb.Length > 0 )
-                    sb.Append( "." );
+                if( sb.Length > 0 ) 
+                    sb.Insert( 0, "." );
 
-                sb.Append( propInfo.Name );
+                sb.Insert( 0, curParentDescriptor.ValueName );
+
+                curParentDescriptor = curParentDescriptor.ParentDescriptor;
             }
 
+            if( Parent != null )
+                sb.Insert( 0, $"{Parent}." );
+
             Path = sb.ToString();
+
         }
 
         public string ValueName { get; }
 
         public ModelDescriptor Parent { get; }
 
+        internal PropertyDescriptor ParentDescriptor { get; }
+        internal bool IsBound { get; set; }
+        internal PropertyInfo PropertyInfo { get; }
         internal string Path { get; }
 
         public Type ValueType { get; }
@@ -58,15 +60,34 @@ namespace System.CommandLine.Binding
 
         public void SetValue( object instance, object value )
         {
-            var setIdx = _propertyPath.Count - 1;
+            var piElements = GetPropertyInfoElements();
+            var setIdx = piElements.Count - 1;
 
-            for( var idx = Parent == null ? 0 : 1; idx < _propertyPath.Count; idx++ )
+            for( var idx = 0; idx < piElements.Count; idx++ )
             {
-                if( idx == setIdx ) _propertyPath[ idx ].SetValue( instance, value );
-                else instance = _propertyPath[ idx ].GetValue( instance );
+                if( idx == setIdx ) piElements[ idx ].SetValue( instance, value );
+                else instance = piElements[ idx ].GetValue( instance );
             }
         }
 
         public override string ToString() => $"{ValueType.Name} {Path}";
+
+        private List<PropertyInfo> GetPropertyInfoElements()
+        {
+            var retVal = new List<PropertyInfo>() { PropertyInfo };
+
+            var curParentDescriptor = ParentDescriptor;
+
+            while( curParentDescriptor != null )
+            {
+                retVal.Add( curParentDescriptor.PropertyInfo );
+
+                curParentDescriptor = curParentDescriptor.ParentDescriptor;
+            }
+
+            retVal.Reverse();
+
+            return retVal;
+        }
     }
 }

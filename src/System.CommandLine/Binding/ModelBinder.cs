@@ -185,7 +185,7 @@ namespace System.CommandLine.Binding
             var boundValues = GetValues(
                 MemberBindingSources,
                 bindingContext,
-                ModelDescriptor.PropertyDescriptors.Descriptors,
+                ModelDescriptor.PropertyDescriptors,
                 includeMissingValues: false);
 
             foreach (var boundValue in boundValues)

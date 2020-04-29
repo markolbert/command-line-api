@@ -32,25 +32,19 @@ namespace System.CommandLine.Binding
             GetPropertyDescriptors(modelType, null);
         }
 
-        private void GetPropertyDescriptors(Type curType, List<PropertyInfo> parentProps )
+        private void GetPropertyDescriptors(Type curType, PropertyDescriptor parentDescriptor )
         {
-            parentProps ??= new List<PropertyInfo>();
-
             foreach ( var propInfo in curType.GetProperties( CommonBindingFlags )
                 .Where( pi => pi.CanWrite ) )
             {
-                PropertyDescriptors.Add( propInfo, parentProps, this );
+                var propDescriptor = PropertyDescriptors.Add( propInfo, parentDescriptor, this );
 
                 // recurse through writable properties
                 if( propInfo.PropertyType.IsClass || propInfo.PropertyType.IsInterface )
                 {
-                    parentProps.Add( propInfo );
-                    GetPropertyDescriptors( propInfo.PropertyType, parentProps );
+                    GetPropertyDescriptors( propInfo.PropertyType, propDescriptor );
                 }
             }
-
-            if( parentProps.Count > 0 )
-                parentProps.Remove( parentProps.Last() );
         }
 
         public IReadOnlyList<ConstructorDescriptor> ConstructorDescriptors =>

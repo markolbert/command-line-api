@@ -20,16 +20,18 @@ namespace System.CommandLine.Binding
     {
         private readonly PropertyDescriptorCollection _propertyDescriptors = new PropertyDescriptorCollection();
 
-        // mostly for backwards compatibility...
-        public ReadOnlyCollection<PropertyDescriptor> Descriptors =>
+        // for backwards compatibility only return "root" properties (i.e., not
+        // subproperties
+        public ReadOnlyCollection<PropertyDescriptor> Legacy =>
             _propertyDescriptors
+                .Where( pd => pd.ParentDescriptor == null )
                 .ToList()
                 .AsReadOnly();
 
-        public bool Add( PropertyDescriptor toAdd, bool throwOnDuplicate = true )
+        public PropertyDescriptor Add( PropertyDescriptor toAdd, bool throwOnDuplicate = true )
         {
             if( toAdd == null )
-                return false;
+                return null;
 
             if( _propertyDescriptors.Contains( toAdd ) )
             {
@@ -37,19 +39,21 @@ namespace System.CommandLine.Binding
                     throw new ArgumentException(
                         $"Duplicate property paths in the model class are not allowed ({toAdd.Parent})");
 
-                return false;
+                return toAdd;
             }
 
             _propertyDescriptors.Add( toAdd );
 
-            return true;
+            return toAdd;
         }
 
-        public bool Add( PropertyInfo propInfo, List<PropertyInfo> parentProps, ModelDescriptor modelDescriptor, bool throwOnDuplicate = true )
+        public PropertyDescriptor Add( 
+            PropertyInfo propInfo, 
+            PropertyDescriptor parentDescriptor, 
+            ModelDescriptor modelDescriptor, 
+            bool throwOnDuplicate = true )
         {
-            parentProps ??=new List<PropertyInfo>();
-
-            return Add( new PropertyDescriptor( propInfo, parentProps, modelDescriptor ), throwOnDuplicate );
+            return Add( new PropertyDescriptor( propInfo,  modelDescriptor, parentDescriptor ), throwOnDuplicate );
         }
 
         // for backwards compatibility
@@ -63,27 +67,42 @@ namespace System.CommandLine.Binding
                     pd.ValueType == propertyType )
                 .ToList();
 
+            PropertyDescriptor retVal = null;
+
             switch( matches.Count )
             {
                 case 0:
                     return null;
 
                 case 1:
-                    return matches[ 0 ];
+                    retVal = matches[ 0 ];
+                    break;
 
                 default:
-                    if( !throwOnMultiple )
-                        return matches[ 0 ];
+                    if( throwOnMultiple )
+                        throw new ArgumentException(
+                            $"Multiple {nameof(PropertyDescriptor)} objects have {nameof(PropertyDescriptor.ValueName)} '{propertyName}' and {nameof(PropertyDescriptor.ValueType)} '{propertyType.Name}'");
 
-                    throw new ArgumentException(
-                        $"Multiple {nameof(PropertyDescriptor)} objects have {nameof(PropertyDescriptor.ValueName)} '{propertyName}' and {nameof(PropertyDescriptor.ValueType)} '{propertyType.Name}'" );
+                    retVal = matches[ 0 ];
+             
+                    break;
             }
+
+            retVal.IsBound = true;
+
+            return retVal;
         }
 
-        public PropertyDescriptor GetPropertyDescriptor( string propertyPath ) =>
-            _propertyDescriptors.Contains( propertyPath )
-                ? _propertyDescriptors[ propertyPath ]
-                : null;
+        public PropertyDescriptor GetPropertyDescriptor( string propertyPath )
+        {
+            if( !_propertyDescriptors.Contains( propertyPath ) ) 
+                return null;
+            
+            var retVal = _propertyDescriptors[ propertyPath ];
+            retVal.IsBound = true;
+
+            return retVal;
+        }
 
         public PropertyDescriptor GetPropertyDescriptor<TModel, TValue>(
             Expression<Func<TModel, TValue>> propertySelector )
@@ -138,6 +157,9 @@ namespace System.CommandLine.Binding
             if( retVal.ValueType != propType)
                 throw new InvalidCastException($"{nameof(PropertyDescriptor.ValueType)} is '{retVal.ValueType}' should be '{propType}'");
 
+            // if this is a subproperty mark it as explicitly bound
+            retVal.IsBound = true;
+
             return retVal;
 
             void add_target_property_name( MemberExpression memExpr )
@@ -145,14 +167,16 @@ namespace System.CommandLine.Binding
                 if( memExpr.Member is PropertyInfo propInfo )
                 {
                     propNames.Add( propInfo.Name );
-                    propType = propInfo.PropertyType;
+
+                    if( propType == null )
+                        propType = propInfo.PropertyType;
                 }
             }
         }
 
         public IEnumerator<IValueDescriptor> GetEnumerator()
         {
-            foreach( var retVal in _propertyDescriptors )
+            foreach( var retVal in _propertyDescriptors.Where( pd => pd.IsBound ) )
             {
                 yield return retVal;
             }
